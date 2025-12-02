@@ -15,7 +15,7 @@ pwm.start(0)  # Починаємо з duty cycle = 0%
 try:
     while True:
         # Плавне збільшення яскравості (наприклад для LED)
-        for duty in range(0, 101, 5):
+        for duty in range(0, 250, 10):
             pwm.ChangeDutyCycle(duty)
             time.sleep(0.5)
 
