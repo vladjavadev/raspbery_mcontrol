@@ -29,10 +29,10 @@ elif MICROSTEPS == 16:
 
 # Пины GPIO для Raspberry Pi (настройте под ваше подключение)
 # Эти пины должны соответствовать вашему подключению к 74HC595
-MOTORLATCH = 9  # Пин защелки (ST_CP)
-MOTORCLK = 4     # Пин тактового сигнала (SH_CP)
-MOTORENABLE = 7  # Пин разрешения (OE)
-MOTORDATA = 8    # Пин данных (DS)
+MOTORLATCH = 2  # Пин защелки (ST_CP)
+MOTORCLK = 3     # Пин тактового сигнала (SH_CP)
+MOTORENABLE = 4  # Пин разрешения (OE)
+MOTORDATA = 17    # Пин данных (DS)
 
 # Биты для управления моторами в сдвиговом регистре
 MOTOR1_A = 2
@@ -213,18 +213,25 @@ class AF_DCMotor:
 if __name__ == "__main__":
     try:
         print("Тест DC мотора...")
-        motor = AF_DCMotor(1)
+        motor4 = AF_DCMotor(4)
+        motor3 = AF_DCMotor(3)
         
-        motor.set_speed(200)
-        motor.run(FORWARD)
+        motor3.set_speed(200)
+        motor3.run(FORWARD)
+        motor4.set_speed(150)
+        motor4.run(FORWARD)
         time.sleep(2)
         
-        motor.run(BACKWARD)
+        motor3.run(BACKWARD)
+        motor4.run(BACKWARD)
         time.sleep(2)
         
-        motor.run(RELEASE)
-        motor.cleanup()
+        motor3.run(RELEASE)
+        motor4.run(RELEASE)
+        motor3.cleanup()
+        motor4.cleanup()
         
     finally:
-        motor.cleanup()
+        motor3.cleanup()
+        motor4.cleanup()
         print("\nЗавершено!")
