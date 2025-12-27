@@ -222,13 +222,15 @@ if __name__ == "__main__":
         motor1 = AF_DCMotor(1)
         
         motor3.set_speed(200)
-        motor3.run(FORWARD)
         motor4.set_speed(150)
+        motor1.set_speed(200)
+        motor2.set_speed(200)
+
+        motor3.run(FORWARD)
         motor4.run(FORWARD)
         motor1.run(FORWARD)
         motor2.run(FORWARD)
-        motor1.set_speed(200)
-        motor2.set_speed(200)
+
         time.sleep(2)
         
         motor3.run(BACKWARD)
