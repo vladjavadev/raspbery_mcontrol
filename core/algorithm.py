@@ -1,4 +1,5 @@
 
+import threading
 from dstar.d_star_lite import DStarLite
 from dstar.grid import OccupancyGridMap, SLAM
 import data as srv
@@ -10,7 +11,7 @@ OBSTACLE = 255
 UNOCCUPIED = 0
 
 
-def run_algorithm(dto: GridDto):
+def run_algorithm(dto: GridDto, stop_event: threading.Event):
 
     """
     set initial values for the map occupancy grid
@@ -78,6 +79,9 @@ def run_algorithm(dto: GridDto):
         dto.set_path(path)
         while True:
             try:
+                if( stop_event.is_set()):
+                    print("Stopping algorithm as stop_event is set.")
+                    break
                 
                 time.sleep(0.1)
                 start = time.time()

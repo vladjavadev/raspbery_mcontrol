@@ -6,6 +6,7 @@ import math
 
 
 class MotorController:
+    motor_start_time = 1
 
     speed_steps=(50,100,150,200,255)
 
@@ -63,7 +64,7 @@ class MotorController:
         self.motor2.run(af.FORWARD)
         self.motor1.run(af.FORWARD)
 
-        timeSleep = self.calc_fwd_time()
+        timeSleep = self.calc_fwd_time() + self.motor_start_time
         time.sleep(timeSleep)
 
         self.totalTime+=timeSleep
@@ -74,7 +75,7 @@ class MotorController:
     def reverse(self):
         self.dto._lock_dist.acquire()
 
-        timeSleep = self.calc_fwd_time(self.speed_step)
+        timeSleep = self.calc_fwd_time(self.speed_step) + self.motor_start_time
 
         self.motor4.run(af.BACKWARD)
         self.motor3.run(af.BACKWARD) 
@@ -92,7 +93,7 @@ class MotorController:
 
         vL = rk.speeds[self.vMode]
         vR = rk.speeds[self.vMode]
-        deltaT = rk.get_deltaT(0, vR, step)
+        deltaT = rk.get_deltaT(0, vR, step) + self.motor_start_time
 
         self.motor4.run(af.FORWARD)
         self.motor3.run(af.FORWARD) 
@@ -109,7 +110,7 @@ class MotorController:
 
         vL = rk.speeds[self.vMode]
         vR = rk.speeds[self.vMode]
-        deltaT = rk.get_deltaT(vL, 0, step)
+        deltaT = rk.get_deltaT(vL, 0, step) + self.motor_start_time
 
         self.motor4.run(af.BACKWARD)
         self.motor3.run(af.BACKWARD) 
@@ -125,3 +126,4 @@ class MotorController:
         self.motor3.run(af.RELEASE) 
         self.motor2.run(af.RELEASE)
         self.motor1.run(af.RELEASE)
+        time.sleep(self.motor_start_time)

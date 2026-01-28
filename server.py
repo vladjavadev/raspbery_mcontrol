@@ -15,17 +15,17 @@ import functools
 from typing import List
 
 #change value for 2 mode 
-mode=3
+mode=4
 g_dt = GridDto()
-
+stop_event = threading.Event()
 logic = Logic(vMode=mode)
 route_times = []
 pred_times = []
 path_build_time_list = []
-# ip="0.0.0.0"
-ip="localhost"
+ip="0.0.0.0"
+# ip="localhost"
 
-async def echo(dto:GridDto, websocket:ServerConnection):
+async def echo(dto:GridDto, stop_event:threading.Event, websocket:ServerConnection):
     message = await websocket.recv()
     event = json.loads(message)
    
@@ -71,8 +71,8 @@ async def echo(dto:GridDto, websocket:ServerConnection):
         dto.set_goal(event["goal"])
     
 
-        m_threads = [DoWork(shared=g_dt, task_func=agm.run_algorithm, name='a'), 
-        DoWork(shared=logic, task_func=moving_robot, name='b')]
+        m_threads = [DoWork(shared=(g_dt,stop_event), task_func=agm.run_algorithm, name='a'), 
+        DoWork(shared=(logic, stop_event), task_func=moving_robot, name='b')]
         for i in m_threads:
             i.start()
         # for i in m_threads:
@@ -89,91 +89,107 @@ async def get_pos(dto: GridDto, websocket:ServerConnection):
 
 async def main():
     print("<!!!! Run SERVER !!!!>")
-    bound_handler = functools.partial(echo, g_dt)
+    bound_handler = functools.partial(echo, g_dt, stop_event)
     async with serve(bound_handler, ip, 8765) as server:
-        await server.serve_forever()
+         while not stop_event.is_set():
+            await asyncio.sleep(2.0)
 
 
-def moving_robot(logic: Logic):
+
+def moving_robot(logic: Logic, stop_event: threading.Event):
     time.sleep(5.0)
     last_path = []
     next_pos = None
     _lock = threading.Lock()
 
     p_obs = po.PathObservation() 
-    threading.Thread(target=move_process, args=(p_obs, logic,route_times)).start()
+    threading.Thread(target=move_process, args=(p_obs, logic,route_times,stop_event)).start()
     start_time = time.time()
-    while True:
-        try:
-            time.sleep(0.1)
-            spbt = time.time() 
-            path = logic.dto.get_path()
-            path_build_time = time.time() - spbt
-            if path is not None and path!=last_path:
-                if len(path)>1:
-                    if not p_obs.is_updated:   
-                        next_pos = path[1]
-                        p_obs.update(next_pos)
-                        ptime, pdistance = logic.predict_time_distance(path)
-                        pred_times.append(ptime)
-                        path_build_time_list.append(path_build_time)
-                        logic.dto.set_predict_time_distance(ptime,pdistance)
+    try:
+        while True:
+                if stop_event.is_set():
+                    break
+                time.sleep(0.1)
+                spbt = time.time() 
+                path = logic.dto.get_path()
+                path_build_time = time.time() - spbt
+                if path is not None and path!=last_path:
+                    if len(path)>1:
+                        if not p_obs.is_updated:   
+                            next_pos = path[1]
+                            p_obs.update(next_pos)
+                            ptime, pdistance = logic.predict_time_distance(path)
+                            pred_times.append(ptime)
+                            path_build_time_list.append(path_build_time)
+                            logic.dto.set_predict_time_distance(ptime,pdistance)
 
-            if logic.dto.get_position() == tuple(logic.dto.get_goal()):
-                print(f"MOVE ROBOT POS:{logic.dto.get_position()}")
-                p_obs.is_done = True
-                print("Client: Reached Goal!")
-                jsonData = {
-                    "build_route_times": route_times,
-                    "predict_times": pred_times,
-                    "path_build_times": path_build_time_list
-                }
-                print("Total time: ", time.time()-start_time)
-                print(json.dumps(jsonData, indent=4))
-                break
-        except Exception as e:
-            print("MOVING ROBOT EXCEPTION:", e)
-            p_obs.is_done
-            logic.stop()
+                if logic.dto.get_position() == tuple(logic.dto.get_goal()):
+                    print(f"MOVE ROBOT POS:{logic.dto.get_position()}")
+                    p_obs.is_done = True
+                    print("Client: Reached Goal!")
+                    jsonData = {
+                        "build_route_times": route_times,
+                        "predict_times": pred_times,
+                        "path_build_times": path_build_time_list
+                    }
+                    print("Total time: ", time.time()-start_time)
+                    print(json.dumps(jsonData, indent=4))
+                    break
+    except Exception as e:
+        print("MOVING ROBOT EXCEPTION:", e)
 
+    finally:
+        p_obs.is_done = True
+        stop_event.set()
+        logic.stop()
 
 class DoWork(threading.Thread):
     def __init__(self, shared, task_func, *args, **kwargs):
         super(DoWork, self).__init__(*args, **kwargs)
+
         self.shared = shared
         self.task_func = task_func  # передаём функцию
 
     def run(self):
         print(threading.current_thread(), 'start')
         time.sleep(1)
-        self.task_func(self.shared)  # вызываем переданную функцию
+        if isinstance(self.shared, tuple):
+            self.task_func(*self.shared) 
+        else:
+            self.task_func(self.shared)
         print(threading.current_thread(), 'done')
 
 
-def move_process(p_obs: po.PathObservation, logic: Logic, route_times: List[int]):
+def move_process(p_obs: po.PathObservation, logic: Logic, route_times: List[int], stop_event: threading.Event):
     counter = 0
     update_time_start = time.time()
     build_route_time_start = time.time()
+    try:
+        while True:
 
-    while True:
+            time.sleep(0.02)
+            if p_obs.is_updated:
+                logic.build_route(p_obs.next_pos)
+                logic.dto.set_position(p_obs.next_pos)
+                route_times.append(time.time()-build_route_time_start)
+                build_route_time_start = time.time()
+                p_obs.is_updated = False
+                counter = 0
+            elif counter ==5:
+                print("No path update, stop robot ", time.time()-update_time_start)
+                update_time_start = time.time()
+                logic.stop()
+            elif p_obs.is_done:
+                logic.stop()
 
-        time.sleep(0.02)
-        if p_obs.is_updated:
-            logic.build_route(p_obs.next_pos)
-            logic.dto.set_position(p_obs.next_pos)
-            route_times.append(time.time()-build_route_time_start)
-            build_route_time_start = time.time()
-            p_obs.is_updated = False
-            counter = 0
-        elif counter ==5:
-            print("No path update, stop robot ", time.time()-update_time_start)
-            update_time_start = time.time()
-            logic.stop()
-        elif p_obs.is_done:
-            logic.stop()
-            break
+                break
 
-        counter  = counter%5+1
+            counter  = counter%5+1
+    except Exception as e:
+        print("MOVE PROCESS EXCEPTION:", e)
+    finally:
+        logic.stop()
+        stop_event.set()
 
 
 def run_server(dto):
