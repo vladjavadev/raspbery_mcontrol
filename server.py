@@ -187,9 +187,9 @@ def move_process(p_obs: po.PathObservation, logic: Logic, route_times: List[int]
             counter  = counter%5+1
     except Exception as e:
         print("MOVE PROCESS EXCEPTION:", e)
+        stop_event.set()
     finally:
         logic.stop()
-        stop_event.set()
 
 
 def run_server(dto):

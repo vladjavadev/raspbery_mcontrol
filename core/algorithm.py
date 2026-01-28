@@ -77,54 +77,57 @@ def run_algorithm(dto: GridDto, stop_event: threading.Event):
     # Only proceed if we have a valid path
     if path:
         dto.set_path(path)
+    try:
+
         while True:
-            try:
-                if( stop_event.is_set()):
-                    print("Stopping algorithm as stop_event is set.")
-                    break
+            if( stop_event.is_set()):
+                print("Stopping algorithm as stop_event is set.")
+                break
+            
+            time.sleep(0.1)
+            start = time.time()
+
+            
+            # update the map
+            # print(path)
+            # drive gui
+            # if path[0]==dto.get_goal():
+            #     logic.move_robot(path,dto.get_position())
+            #     print("Reached goal!")
+            #     break
+
+            new_position = dto.get_position()
+            new_observation = dto.observation
+            new_map = dto.world
+
+            # logic.move_robot(path,new_position)
+            if new_observation is not None:
+                old_map = new_map
+                slam.set_ground_truth_map(gt_map=new_map)
+
+            # print("new_pos and last_pos",new_position,last_position)
+            if new_position != last_position:
+                dto._lock.acquire()
+                last_position = new_position
+
+                # slam
+                new_edges_and_old_costs, slam_map = slam.rescan(global_position=new_position)
+
+                dstar.new_edges_and_old_costs = new_edges_and_old_costs
+                dstar.sensed_map = slam_map
+
+                # d star
+
+                path, g, rhs = dstar.move_and_replan(robot_position=new_position)
+
+                end = time.time()
+                dto._lock.release()
+            dto.set_path(path)
                 
-                time.sleep(0.1)
-                start = time.time()
-
-                
-                # update the map
-                # print(path)
-                # drive gui
-                # if path[0]==dto.get_goal():
-                #     logic.move_robot(path,dto.get_position())
-                #     print("Reached goal!")
-                #     break
-
-                new_position = dto.get_position()
-                new_observation = dto.observation
-                new_map = dto.world
-
-                # logic.move_robot(path,new_position)
-                if new_observation is not None:
-                    old_map = new_map
-                    slam.set_ground_truth_map(gt_map=new_map)
-
-                # print("new_pos and last_pos",new_position,last_position)
-                if new_position != last_position:
-                    dto._lock.acquire()
-                    last_position = new_position
-
-                    # slam
-                    new_edges_and_old_costs, slam_map = slam.rescan(global_position=new_position)
-
-                    dstar.new_edges_and_old_costs = new_edges_and_old_costs
-                    dstar.sensed_map = slam_map
-
-                    # d star
-
-                    path, g, rhs = dstar.move_and_replan(robot_position=new_position)
-
-                    end = time.time()
-                    dto._lock.release()
-                dto.set_path(path)
-                
-            except TypeError as e:
-                print(e)
+    except TypeError as e:
+        print(e)
+    finally:
+        stop_event.set()
 
 
 
